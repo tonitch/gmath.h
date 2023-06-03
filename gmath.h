@@ -13,6 +13,8 @@ typedef struct {
 	short height;
 } Matrix;
 
+typedef float vec3[3];
+
 typedef enum { GMatrix_Rotation_X, GMatrix_Rotation_Y, GMatrix_Rotation_Z} GMatrix_Rotation;
 
 Matrix GMatrix_malloc(short width, short height);
@@ -33,6 +35,12 @@ void GMatrix_prod(Matrix dest, const Matrix mat1, const Matrix mat2);
 void GMatrix_vector_scale(Matrix dest, float x, float y, float z);
 void GMatrix_vector_translate(Matrix dest, float x, float y, float z);
 void GMatrix_vector_rotate(Matrix dest, float d, GMatrix_Rotation r);
+
+float GVector_dist(const vec3 v1, const vec3 v2);
+float GVector_lenght(const vec3 v);
+void GVector_cross(vec3 dest, const vec3 v1, const vec3 v2);
+
+void GMatrix_view_translate(Matrix dest, float x, float y, float z);
 
 #endif
 
@@ -133,7 +141,7 @@ void GMatrix_vector_scale(Matrix dest, float x, float y, float z){
 	GMAT_AT(trans, 2, 2) = z;
 	Matrix ret = {.mat=GMATH_MALLOC(sizeof(float)*dest.width*dest.height), .width=dest.width, .height=dest.height};
 	GMATH_MEMCPY(ret.mat, dest.mat, sizeof(float)*dest.width*dest.height);
-	GMatrix_prod(dest, ret, trans);
+	GMatrix_prod(dest, trans, ret);
 	free(ret.mat);
 }
 
@@ -144,7 +152,7 @@ void GMatrix_vector_translate(Matrix dest, float x, float y, float z){
 	GMAT_AT(trans, 2, 3) = z;
 	Matrix ret = {.mat=GMATH_MALLOC(sizeof(float)*dest.width*dest.height), .width=dest.width, .height=dest.height};
 	GMATH_MEMCPY(ret.mat, dest.mat, sizeof(float)*dest.width*dest.height);
-	GMatrix_prod(dest, ret, trans);
+	GMatrix_prod(dest, trans, ret);
 	free(ret.mat);
 }
 
@@ -174,6 +182,55 @@ void GMatrix_vector_rotate(Matrix dest, float d, GMatrix_Rotation r){
 	Matrix ret = {.mat=GMATH_MALLOC(sizeof(float)*dest.width*dest.height), .width=dest.width, .height=dest.height};
 	GMATH_MEMCPY(ret.mat, dest.mat, sizeof(float)*dest.width*dest.height);
 	GMatrix_prod(dest, ret, trans);
+	free(ret.mat);
+}
+
+float GVector_dist(const vec3 v1, const vec3 v2){
+	return GVector_lenght((vec3) { (v1[0] - v2[0]), (v1[1] - v2[1]), (v1[2] - v2[2]) });
+}
+
+float GVector_lenght(const vec3 v){
+	return sqrtf(powf(v[0], 2) + powf(v[1], 2) + powf(v[2], 2));
+}
+
+void GVector_cross(vec3 dest, const vec3 v1, const vec3 v2){
+	dest[0] = v1[1] * v2[2] - v1[2]*v2[1];
+	dest[1] = v1[2] * v2[0] - v1[0]*v2[2];
+	dest[2] = v1[0] * v2[1] - v1[1]*v2[0];
+}
+
+void GMatrix_view_lookAt(Matrix dest, vec3 cam_pos, vec3 look_at_pos){
+	Matrix trans = GMatrix_unit(4);
+	GMatrix_vector_translate(trans, -cam_pos[0], -cam_pos[1], -cam_pos[2]);
+
+	float diff = GVector_dist(cam_pos, look_at_pos);
+	vec3 forward_vector = {
+		(cam_pos[0] - look_at_pos[0])/diff,
+	   	(cam_pos[1] - look_at_pos[1])/diff,
+	   	(cam_pos[2] - look_at_pos[2])/diff
+	};
+
+	vec3 up = { 0., 1., 0. };
+	vec3 left;
+	GVector_cross(left, up, forward_vector);
+	float left_l = GVector_lenght(left);
+	left[0] = left[0]/left_l;
+	left[1] = left[1]/left_l;
+	left[2] = left[2]/left_l;
+
+	GVector_cross(up, forward_vector, left);
+	float rotate_matrix[] = {
+		left[0], left[1], left[2], 0,
+		up[0], up[1], up[2], 0,
+		forward_vector[0], forward_vector[1], forward_vector[2], 0,
+		0, 0, 0, 1
+	};
+	Matrix rotate = {.mat= rotate_matrix, .width=4, .height=4};
+	Matrix view = GMatrix_unit(4);
+	GMatrix_prod(view, rotate, trans);
+	Matrix ret = {.mat=GMATH_MALLOC(sizeof(float)*dest.width*dest.height), .width=dest.width, .height=dest.height};
+	GMATH_MEMCPY(ret.mat, dest.mat, sizeof(float)*dest.width*dest.height);
+	GMatrix_prod(dest, ret, view);
 	free(ret.mat);
 }
 
